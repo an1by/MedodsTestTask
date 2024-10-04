@@ -4,6 +4,7 @@ import (
 	"aniby/medods/database"
 	"aniby/medods/util"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -14,45 +15,53 @@ type GetTokensResponse struct {
 }
 
 var JwtSercetKey string
+var AccessTokenExpiresIn int
 
-func setCookieTokens(writer gin.ResponseWriter, accessToken string, refreshToken string) {
+func setCookieTokens(writer gin.ResponseWriter, accessToken string, refreshToken string, expiresAt time.Time) {
 	http.SetCookie(writer, &http.Cookie{
 		Name: "medods_access_token",
 		Value: accessToken,
 		Path: "/",
 		HttpOnly: true,
-		MaxAge: 0,
+		Expires: expiresAt,
 	})
 	http.SetCookie(writer, &http.Cookie{
 		Name: "medods_refresh_token",
 		Value: refreshToken,
 		Path: "/",
 		HttpOnly: true,
-		MaxAge: 0,
+		Expires: expiresAt,
 	})
 }
 
+func newAccessTokenExpiresAt() time.Time {
+	expiresIn := time.Duration(int64(time.Hour) * int64(AccessTokenExpiresIn))
+	return time.Now().Add(expiresIn)
+}
+
 func GetTokens(c *gin.Context) {
-	id := c.Param(":id")
-	
-	user, err := database.CreateUser(id)
+	id := c.Param("id")
+
+	user, refreshToken, err := database.CreateUser(id)
 	if err != nil {
 		c.Status(http.StatusBadRequest)
 		return
 	}
+
 	_, err = database.InsertUser(user)
 	if err != nil {
 		c.Status(http.StatusBadRequest)
 		return
 	}
 
-	accessToken, err := user.GenerateAccessToken(c.ClientIP(), JwtSercetKey)
+	expiresAt := newAccessTokenExpiresAt()
+	accessToken, err := user.GenerateAccessToken(c.ClientIP(), expiresAt.Unix(), JwtSercetKey)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 	
-	setCookieTokens(c.Writer, accessToken, user.RefreshToken)
+	setCookieTokens(c.Writer, accessToken, refreshToken, expiresAt)
 	c.Status(http.StatusOK)
 }
 
@@ -99,13 +108,20 @@ func PatchTokens(c *gin.Context) {
 	}
 
 	// Refresh
-	accessToken, err = user.GenerateAccessToken(address, JwtSercetKey)
+	expiresAt := newAccessTokenExpiresAt()
+	accessToken, err = user.GenerateAccessToken(address, expiresAt.Unix(), JwtSercetKey)
 	if err != nil {
 		c.Status(http.StatusInternalServerError)
 		return
 	}
 
-	user.Refresh()
-	setCookieTokens(c.Writer, accessToken, user.RefreshToken)
+	refreshToken, err = user.Refresh()
+	if err != nil {
+		c.Status(http.StatusInternalServerError)
+		return
+	}
+
+	database.UpdateUser(*user)
+	setCookieTokens(c.Writer, accessToken, refreshToken, expiresAt)
 	c.Status(http.StatusOK)
 }

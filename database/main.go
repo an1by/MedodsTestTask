@@ -7,11 +7,10 @@ import (
 
 var db *pg.DB
 
-func ReadyDatabase(options *pg.Options) error {
+func ReadyDatabase(options *pg.Options) (*pg.DB, error) {
     db = pg.Connect(options)
-    defer db.Close()
 
-	return сreateSchema(db)
+	return db, сreateSchema(db)
 }
 
 func FindUserById(id string) (*User, error) {
@@ -21,11 +20,11 @@ func FindUserById(id string) (*User, error) {
 }
 
 func InsertUser(user User) (orm.Result, error) {
-    return db.Model(user).Insert()
+    return db.Model(&user).Insert()
 }
 
 func UpdateUser(user User) (orm.Result, error) {
-    return db.Model(user).Update()
+    return db.Model(&user).Update()
 }
 
 func сreateSchema(db *pg.DB) error {
@@ -35,7 +34,8 @@ func сreateSchema(db *pg.DB) error {
 
     for _, model := range models {
         err := db.Model(model).CreateTable(&orm.CreateTableOptions{
-            Temp: true,
+            Temp: false,
+            IfNotExists: true,
         })
         if err != nil {
             return err

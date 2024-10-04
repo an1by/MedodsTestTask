@@ -5,8 +5,8 @@ import (
 )
 
 func GenerateSignedJWTString(payload jwt.MapClaims, secretKey string) (string, error) {
-	token := jwt.NewWithClaims(jwt.SigningMethodES512, payload)
-	return token.SignedString(secretKey)
+	token := jwt.NewWithClaims(jwt.SigningMethodHS512, payload)
+	return token.SignedString([]byte(secretKey))
 }
 
 func DecodeSignedJWTString(jwtSignedString string, secretKey string) (jwt.MapClaims, error) {
