@@ -1,0 +1,17 @@
+services:
+  postgres:
+    image: postgres:17.0
+    environment:
+      POSTGRES_DB: "medods_test"
+      POSTGRES_USER: "postgres"
+      POSTGRES_PASSWORD: "root"
+    ports:
+      - "5432:5432"
+      
+  backend:
+    build:
+      dockerfile: Dockerfile
+      context: .
+      target: dev
+    volumes:
+      - .:/app
